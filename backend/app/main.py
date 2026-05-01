@@ -37,9 +37,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Allow any localhost port for dev plus an optional regex
+# (so Vercel preview deploys like https://syntrx-abc123.vercel.app
+# work without re-listing every URL). Set CORS_ORIGIN_REGEX in prod.
+import os as _os
+_cors_regex = _os.getenv("CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_list,
+    allow_origin_regex=_cors_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

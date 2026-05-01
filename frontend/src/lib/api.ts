@@ -1,4 +1,10 @@
-// Tiny typed API client. Vite's dev server proxies /api → backend.
+// Tiny typed API client.
+//
+// Dev:  Vite's dev server proxies /api → backend (vite.config.ts).
+// Prod: VITE_API_URL (set at build time on the Vercel side) points at the
+//       deployed backend. When unset, requests fall back to same-origin /api.
+
+const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
 export type Confidence = "high" | "moderate" | "emerging";
 export type Domain = "drug_metabolism" | "nutrient" | "diet_fitness" | "risk_awareness";
@@ -66,7 +72,7 @@ export interface ReportSummary {
 export async function uploadFile(file: File, useLLM = true): Promise<Report> {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch(`/api/upload?use_llm=${useLLM}`, { method: "POST", body: fd });
+  const res = await fetch(`${API_BASE}/api/upload?use_llm=${useLLM}`, { method: "POST", body: fd });
   if (!res.ok) {
     // FastAPI error responses come as { detail: "..." } — surface the detail
     let detail = `${res.status}`;
@@ -82,13 +88,13 @@ export async function uploadFile(file: File, useLLM = true): Promise<Report> {
 }
 
 export async function getReport(id: string): Promise<Report> {
-  const res = await fetch(`/api/reports/${id}`);
+  const res = await fetch(`${API_BASE}/api/reports/${id}`);
   if (!res.ok) throw new Error("Report not found");
   return res.json();
 }
 
 export async function listReports(): Promise<ReportSummary[]> {
-  const res = await fetch("/api/reports");
+  const res = await fetch(`${API_BASE}/api/reports`);
   if (!res.ok) throw new Error("Could not load reports");
   return res.json();
 }
@@ -97,7 +103,7 @@ export async function checkInteractions(reportId: string, drugs: string[]) {
   const fd = new FormData();
   fd.append("drugs", drugs.join(","));
   fd.append("report_id", reportId);
-  const res = await fetch(`/api/interactions/check`, { method: "POST", body: fd });
+  const res = await fetch(`${API_BASE}/api/interactions/check`, { method: "POST", body: fd });
   if (!res.ok) throw new Error("Check failed");
   return res.json() as Promise<{
     drugs: string[];
@@ -114,7 +120,7 @@ export async function checkInteractions(reportId: string, drugs: string[]) {
 }
 
 export async function knownDrugs(): Promise<string[]> {
-  const r = await fetch("/api/interactions/drugs");
+  const r = await fetch(`${API_BASE}/api/interactions/drugs`);
   return r.json();
 }
 
