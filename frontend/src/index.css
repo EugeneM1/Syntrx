@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { font-feature-settings: "cv11", "ss01", "ss03"; }
+  body { @apply antialiased; }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+  }
+  .pill {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 font-medium transition;
+  }
+  .btn-primary {
+    @apply btn bg-accent-600 text-white hover:bg-accent-700 disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply btn text-ink-600 hover:bg-slate-100;
+  }
+}

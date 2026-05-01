@@ -1,0 +1,203 @@
+# Syntrx
+
+**AI-powered personalized medicine from your DNA.**
+
+Syntrx parses the raw genetic data file you already have from 23andMe or
+AncestryDNA and generates a personalized health report across four
+domains — drug metabolism, nutrient optimization, diet and fitness, and
+lifestyle-modifiable risk — every recommendation cited to a CPIC
+clinical guideline, FDA pharmacogenomic label, or peer-reviewed source.
+
+The clinical content is produced by a *deterministic* CPIC-grounded
+engine; an optional LLM "narrator" only adds plain-English flavour on
+top. That separation is what makes Syntrx auditable: the same input
+produces the same recommendations, and the recommendations can be
+validated bit-for-bit against published guidelines.
+
+The synthetic test suite achieves **100% concordance** against expected
+CPIC phenotypes across the curated profiles.
+
+## Architecture at a glance
+
+```
+                        ┌──────────────┐
+   23andMe / Ancestry → │ Parser Agent │ → user genotypes (curated 49+ SNP catalog)
+                        └──────────────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │ Lookup Agent │ ← ChromaDB (PharmGKB / SNPedia / PubMed)
+                        └──────────────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │  Synthesis   │ → deterministic engine (CPIC tables)
+                        │    Agent     │   + optional LLM narrator
+                        └──────────────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │ Safety Agent │ → strip diagnostic phrasing,
+                        └──────────────┘    add physician disclaimers
+                               │
+                               ▼
+                       Report (JSON / PDF / UI)
+```
+
+### Why deterministic + LLM, not pure-LLM?
+
+A pure-LLM pharmacogenomics tool can hallucinate dose changes. A
+deterministic engine grounded in CPIC tables cannot. Syntrx's
+recommendation layer is closed-form Python with no LLM in the path; the
+LLM is only allowed to add a non-prescriptive narrator paragraph, and
+the Safety Agent strips anything that smells diagnostic. This gives
+auditable accuracy *and* a friendly voice.
+
+## Project layout
+
+```
+syntrx/
+├── backend/            FastAPI + multi-agent pipeline (Python 3.11+)
+│   ├── app/
+│   │   ├── core/        ← parser, SNP catalog, phenotype caller, recommendation engine
+│   │   ├── agents/      ← Parser → Lookup → Synthesis → Safety
+│   │   ├── services/    ← LLM provider abstraction, pipeline, PDF, drug-interactions
+│   │   ├── knowledge/   ← ChromaDB wrapper for the RAG store
+│   │   ├── api/         ← FastAPI routes
+│   │   ├── db/          ← SQLAlchemy models
+│   │   └── schemas/     ← Pydantic request/response models
+│   ├── data/sample/     ← Synthetic 23andMe files with known phenotypes
+│   ├── tests/           ← Pytest suite (parser, phenotype, recs, pipeline, API)
+│   └── scripts/         ← generate_sample_data, evaluate (CPIC concordance), ingest_pharmgkb
+├── frontend/           React + Vite + Tailwind + Recharts
+│   └── src/
+│       ├── components/  ← ConfidenceBadge, DomainSection, FindingCard, Upload, SummaryStats
+│       ├── pages/       ← Home, Report, Interactions
+│       └── lib/         ← Typed API client
+├── docker-compose.yml  ← Postgres + Redis + backend + frontend
+├── .vscode/            ← debug configs + recommended extensions
+└── .github/workflows/  ← CI (pytest + frontend build)
+```
+
+## Getting started
+
+### One-command Docker
+
+```bash
+cp .env.example .env
+docker compose up --build
+# Frontend → http://localhost:5173
+# API      → http://localhost:8000/docs
+```
+
+### Local dev (no Docker)
+
+#### Backend
+
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python -m scripts.generate_sample_data           # synthetic 23andMe files
+python -m app.cli analyze data/sample/sample_warfarin_sensitive_pgx_storm.txt
+uvicorn app.main:app --reload                    # API on :8000, docs at /docs
+pytest -q                                         # full suite
+python -m scripts.evaluate                        # CPIC concordance report
+```
+
+#### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev                                       # Vite dev server on :5173
+```
+
+## Configuring the LLM (optional)
+
+Without an API key, Syntrx uses a deterministic mock narrator and the
+clinical engine still produces a complete report. To turn on a real LLM:
+
+```env
+# .env
+LLM_PROVIDER=anthropic                # or openai
+ANTHROPIC_API_KEY=sk-ant-…
+LLM_MODEL=claude-sonnet-4-6
+```
+
+Switch between providers without code changes.
+
+## Demo flow
+
+1. Drag-drop `backend/data/sample/sample_warfarin_sensitive_pgx_storm.txt`
+   into the upload card. (Generated by `scripts/generate_sample_data.py`.)
+2. The pipeline runs Parser → Lookup → Synthesis → Safety. The trace
+   appears in the dashboard.
+3. The report opens with four collapsible domains. The "Clopidogrel
+   resistance", "Warfarin sensitivity", "DPYD reduced activity" and
+   "Statin myopathy" findings should all be flagged for physician follow-up.
+4. Click **Download PGx card (PDF)** to get a printable one-page summary
+   designed to be handed to a prescriber.
+5. Click **Drug interaction checker**, paste in a few drugs
+   (`codeine, plavix, simvastatin, omeprazole, sertraline`) and hit
+   **Check** to see severity-coded gene-drug flags.
+
+## Validation
+
+```bash
+cd backend
+python -m scripts.evaluate
+```
+
+```
+                CPIC Concordance
+profile                          Gene     Expected      Got                    Match
+average_european                 CYP2D6   Normal        Normal Metabolizer       ✓
+average_european                 CYP2C19  Normal        Normal Metabolizer       ✓
+average_european                 VKORC1   Standard      Standard …               ✓
+cyp2d6_poor_metabolizer          CYP2D6   Poor          Poor Metabolizer         ✓
+warfarin_sensitive_pgx_storm     CYP2C9   Poor          Poor Metabolizer         ✓
+warfarin_sensitive_pgx_storm     VKORC1   High          High …                   ✓
+warfarin_sensitive_pgx_storm     SLCO1B1  Poor          Poor Function            ✓
+warfarin_sensitive_pgx_storm     DPYD     Intermediate  Intermediate …           ✓
+warfarin_sensitive_pgx_storm     CYP2C19  Poor          Poor Metabolizer         ✓
+ultrarapid_2c19_caffeine_slow    CYP2C19  Ultrarapid    Ultrarapid Metabolizer   ✓
+ultrarapid_2c19_caffeine_slow    CYP1A2   Slow          Slow Metabolizer         ✓
+apoe_e4_carrier_with_iron        APOE     ε4            Single ε4 carrier        ✓
+apoe_e4_carrier_with_iron        HFE      C282Y/H63D    C282Y/H63D compound …    ✓
+
+Concordance: 13/13 = 100.0%
+```
+
+## What Syntrx covers today
+
+* **Pharmacogenomics (23 SNPs):** CYP2D6, CYP2C19, CYP2C9, CYP3A5,
+  CYP1A2, VKORC1, SLCO1B1, DPYD, TPMT, UGT1A1, IFNL3, G6PD.
+* **Nutrigenomics (10 SNPs):** MTHFR, VDR, FUT2, BCO1, SLC23A1, TCN2, GC.
+* **Diet / fitness (10 SNPs):** APOA2, MCM6/LCT, ACTN3, ADH1B, ALDH2,
+  FTO, TCF7L2, PPARG, TAS2R38, TRPV1.
+* **Risk awareness (6 SNPs):** APOE, HFE, F5 (Factor V Leiden), F2 (prothrombin).
+
+The full curated list lives in [`backend/app/core/snp_catalog.py`](backend/app/core/snp_catalog.py).
+
+## Regulatory positioning
+
+Syntrx is positioned as a **genetic literacy and wellness tool** — it
+does not diagnose disease, prescribe medication, or replace medical
+advice. The Safety Agent enforces that:
+
+* Every finding that suggests a prescription change carries a "discuss
+  with prescriber" disclaimer in its action list.
+* The synthesis prompt is explicit that the LLM may not invent dosages
+  or change clinical claims; the Safety Agent regex-strips any LLM
+  output that drifts into diagnostic phrasing.
+* The global disclaimer is embedded in every report payload and on the
+  PDF card.
+
+## Roadmap
+
+* PharmGKB bulk ingestion + Pinecone for production RAG
+* Authentication (Clerk / Auth0) and per-user report history
+* Comparison view: diff two reports (yours vs a family member's)
+* Lifestyle-modifiable polygenic risk scores (T2D, CAD, MDD)
+* Mobile-first redesign of the report viewer

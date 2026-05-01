@@ -1,0 +1,11 @@
+gene	drug	level	annotation
+CYP2D6	codeine	1A	CPIC: codeine should not be administered to CYP2D6 ultrarapid metabolizers due to severe morphine accumulation; poor metabolizers will not respond.
+CYP2C19	clopidogrel	1A	CPIC: alternative antiplatelet (prasugrel/ticagrelor) recommended for CYP2C19 *2/*2 or *3/*3 patients post-PCI.
+CYP2C9	warfarin	1A	CPIC: dose adjustment based on combined CYP2C9 + VKORC1 algorithm; reduce starting dose for *2 and *3 carriers.
+SLCO1B1	simvastatin	1A	CPIC: prefer rosuvastatin or pravastatin in *5 carriers due to elevated myopathy risk.
+DPYD	fluorouracil	1A	CPIC: 50% dose reduction for DPYD intermediate metabolizers; avoid in poor metabolizers.
+TPMT	azathioprine	1A	CPIC: severe dose reduction or alternative therapy for TPMT poor metabolizers.
+UGT1A1	atazanavir	1B	CPIC: alternative antiretroviral for *28/*28 patients due to hyperbilirubinemia.
+VKORC1	warfarin	1A	CPIC: A allele predicts increased sensitivity to warfarin; lower starting dose required.
+CYP2D6	tamoxifen	2A	CPIC: alternative endocrine therapy for CYP2D6 poor metabolizers in postmenopausal breast cancer.
+MTHFR	folate	3	Reduced MTHFR activity (C677T TT) lowers conversion of folic acid to 5-MTHF; methylfolate supplementation preferred.
